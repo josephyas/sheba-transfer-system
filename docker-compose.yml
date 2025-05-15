@@ -1,0 +1,84 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sheba_app
+    volumes:
+      - .:/var/www
+      - ./docker/php/conf.d/local.ini:/usr/local/etc/php/conf.d/local.ini
+    ports:
+      - "9001:8000"
+    networks:
+      - sheba_network
+    depends_on:
+      - db
+      - redis
+    command: php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sheba_caddy
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "8012:80"
+      - "8443:443"
+    networks:
+      - sheba_network
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0
+    container_name: sheba_db
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-sheba}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_USER: ${DB_USERNAME:-sheba}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+    ports:
+      - "3308:3306"
+    networks:
+      - sheba_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: sheba_redis
+    ports:
+      - "6380:6379"
+    networks:
+      - sheba_network
+    volumes:
+      - redis_data:/data
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sheba_queue
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    networks:
+      - sheba_network
+    depends_on:
+      - app
+      - db
+      - redis
+    command: php artisan queue:work
+
+networks:
+  sheba_network:
+    driver: bridge
+
+volumes:
+  db_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

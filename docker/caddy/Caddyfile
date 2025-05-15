@@ -1,0 +1,32 @@
+# Development Caddyfile
+localhost {
+    # Reverse proxy to Octane
+    reverse_proxy app:8000
+
+    # Enable compression
+    encode gzip
+
+    # Logs
+    log {
+        output file /var/log/caddy/access.log
+    }
+}
+
+# Production Caddyfile (commented out, enable when deploying)
+# sheba-transfer-system.example.com {
+#     reverse_proxy app:8000
+#     encode gzip
+#     tls {
+#         protocols tls1.2 tls1.3
+#     }
+#     header {
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#         X-XSS-Protection "1; mode=block"
+#         X-Content-Type-Options "nosniff"
+#         X-Frame-Options "DENY"
+#         Referrer-Policy "no-referrer-when-downgrade"
+#     }
+#     log {
+#         output file /var/log/caddy/sheba-access.log
+#     }
+# }
