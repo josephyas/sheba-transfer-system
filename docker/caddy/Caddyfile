@@ -1,5 +1,5 @@
 # Development Caddyfile
-localhost {
+localhost:8012 {
     # Reverse proxy to Octane
     reverse_proxy app:8000
 
