@@ -85,6 +85,36 @@ class ShebaService
         } );
     }
 
+    public function updateRequestStatus( string $requestId, string $status, ?string $note = null ): array
+    {
+        $shebaRequest = ShebaRequest::find( $requestId );
+
+        if ( !$shebaRequest ) {
+            throw new InvalidRequestException( 'Sheba request not found' );
+        }
+
+        if ( $shebaRequest->status !== 'pending' ) {
+            throw new InvalidRequestException( 'Sheba request is not in pending status' );
+        }
+
+        return DB::transaction( function () use ( $shebaRequest, $status, $note ) {
+            if ( $status === 'confirmed' ) {
+                $this->confirmRequest( $shebaRequest );
+            } else if ( $status === 'canceled' ) {
+                $this->cancelRequest( $shebaRequest, $note );
+            }
+
+            return [
+                'id'              => $shebaRequest->id,
+                'price'           => $shebaRequest->price,
+                'status'          => $shebaRequest->status,
+                'fromShebaNumber' => $shebaRequest->from_sheba_number,
+                'ToShebaNumber'   => $shebaRequest->to_sheba_number,
+                'createdAt'       => $shebaRequest->created_at->toIso8601String()
+            ];
+        } );
+    }
+
     private function confirmRequest( ShebaRequest $shebaRequest ): void
     {
         $destAccount = Account::where( 'sheba_number', $shebaRequest->to_sheba_number )->first();
