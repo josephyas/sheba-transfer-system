@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libzip-dev \
     zip \
-    unzip
+    unzip \
+    libssl-dev \
+    build-essential \
+    libbrotli-dev
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -27,12 +30,6 @@ RUN pecl install redis && docker-php-ext-enable redis
 
 # Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
-# Copy application files
-COPY . .
-
-# Set permissions
-RUN chown -R www-data:www-data /var/www
 
 EXPOSE 8000
 
