@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 
 class ShebaService
 {
-    public function getAllRequests(): array
+    public function getAllRequests( ?string $status = null ): array
     {
         $cacheKey = 'sheba_requests_' . ( $status ?? 'all' );
 
@@ -69,7 +69,7 @@ class ShebaService
         }
 
         $job = new ProcessTransferRequest( $price, $fromShebaNumber, $toShebaNumber, $note, $idempotencyKey );
-        return dispatch_sync( $job );
+        return $job->handle();
     }
 
     public function updateRequestStatus( string $requestId, string $status, ?string $note = null ): array
@@ -79,11 +79,9 @@ class ShebaService
         if ( $lock->get() ) {
             try {
                 $job = new ProcessTransferApproval( $requestId, $status, $note );
-                $result = dispatch_sync( $job );
 
-                $this->clearCaches();
+                return $job->handle();
 
-                return $result;
             } finally {
                 $lock->release();
             }
