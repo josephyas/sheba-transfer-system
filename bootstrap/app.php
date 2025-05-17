@@ -12,13 +12,14 @@ return Application::configure( basePath: dirname( __DIR__ ) )
         health: '/up',
     )
     ->withMiddleware( function ( Middleware $middleware ) {
-        $middleware->alias( [
-            'api.throttle' => ApiRateLimiter::class,
-        ] );
-
-        $middleware->group( 'api', [
-            'api.throttle:1200,1',
-        ] );
+// Disabled for performance test
+//        $middleware->alias( [
+//            'api.throttle' => ApiRateLimiter::class,
+//        ] );
+//
+//        $middleware->group( 'api', [
+//            'api.throttle:12000,1',
+//        ] );
 
         $middleware->append( PerformanceMonitoring::class );
     } )

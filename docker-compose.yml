@@ -3,8 +3,6 @@ services:
         build:
             context: .
             dockerfile: docker/php/Dockerfile
-        deploy:
-            replicas: 4
         volumes:
             - .:/var/www
             - ./docker/php/conf.d/local.ini:/usr/local/etc/php/conf.d/local.ini
@@ -14,6 +12,10 @@ services:
             - db
             - redis
         command: php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000 --workers=16 --task-workers=8
+        deploy:
+            replicas: 4
+        cpus: '4'
+        mem_limit: 6g
 
     caddy:
         image: caddy:2-alpine
@@ -47,12 +49,6 @@ services:
             - "3307:3306"
         networks:
             - sheba_network
-        deploy:
-            resources:
-                limits:
-                    memory: 4GB
-                reservations:
-                    memory: 512M
 
     redis:
         image: redis:7-alpine
@@ -67,7 +63,6 @@ services:
 
     queue:
         image: sheba-transfer-system-app
-        container_name: sheba_queue
         working_dir: /var/www
         volumes:
             - .:/var/www
@@ -77,7 +72,12 @@ services:
             - app
             - db
             - redis
-        command: php artisan queue:work --queue=high,default --tries=3 --timeout=90
+
+        command: php artisan queue:work --queue=transfers --tries=3 --backoff=3 --max-jobs=1000 --sleep=0.1
+        deploy:
+            replicas: 4
+        cpus: '1'
+        mem_limit: 2g
 
 networks:
     sheba_network:
