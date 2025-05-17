@@ -25,10 +25,6 @@ return new class extends Migration {
             $table->index( [ 'status', 'created_at' ] );
             $table->index( 'from_sheba_number' );
             $table->index( 'to_sheba_number' );
-
-            $table->index( [ 'status', 'created_at' ] );
-            $table->index( 'from_sheba_number' );
-            $table->index( 'to_sheba_number' );
             $table->index( [ 'from_sheba_number', 'status' ], 'idx_from_status' );  // For account history filtering by status
             $table->index( [ 'to_sheba_number', 'status' ], 'idx_to_status' );      // For account history filtering by status
             $table->index( [ 'confirmed_at' ], 'idx_confirmed_date' );              // For date-based reporting on completed transfers
