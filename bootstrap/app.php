@@ -17,7 +17,7 @@ return Application::configure( basePath: dirname( __DIR__ ) )
         ] );
 
         $middleware->group( 'api', [
-            'api.throttle:120,1',
+            'api.throttle:1200,1',
         ] );
 
         $middleware->append( PerformanceMonitoring::class );
