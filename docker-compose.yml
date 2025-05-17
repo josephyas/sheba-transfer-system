@@ -50,6 +50,7 @@ services:
     redis:
         image: redis:7-alpine
         container_name: sheba_redis
+        command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
         ports:
             - "6380:6379"
         networks:
