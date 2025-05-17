@@ -4,115 +4,82 @@ namespace App\Services;
 
 use App\Exceptions\InsufficientBalanceException;
 use App\Exceptions\InvalidRequestException;
+use App\Jobs\ProcessTransferApproval;
+use App\Jobs\ProcessTransferRequest;
 use App\Models\Account;
 use App\Models\ShebaRequest;
 use App\Models\Transaction;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class ShebaService
 {
     public function getAllRequests(): array
     {
-        $requests = ShebaRequest::orderBy( 'created_at', 'asc' )->get();
+        $cacheKey = 'sheba_requests_' . ( $status ?? 'all' );
 
-        return $requests->map( function ( $request ) {
-            return [
-                'id'              => $request->id,
-                'price'           => $request->price,
-                'status'          => $request->status,
-                'fromShebaNumber' => $request->from_sheba_number,
-                'ToShebaNumber'   => $request->to_sheba_number,
-                'createdAt'       => $request->created_at->toIso8601String()
-            ];
-        } )->toArray();
+        return Cache::remember( $cacheKey, 3, function () use ( $status ) {
+            $query = ShebaRequest::query();
+
+            if ( $status ) {
+                $query->where( 'status', $status );
+            }
+
+            $requests = $query->orderBy( 'created_at', 'asc' )->get();
+
+            return $requests->map( function ( $request ) {
+                return [
+                    'id'              => $request->id,
+                    'price'           => $request->price,
+                    'status'          => $request->status,
+                    'fromShebaNumber' => $request->from_sheba_number,
+                    'ToShebaNumber'   => $request->to_sheba_number,
+                    'createdAt'       => $request->created_at->toIso8601String()
+                ];
+            } )->toArray();
+        } );
     }
 
     /**
      * @throws InvalidRequestException
      * @throws InsufficientBalanceException
      */
-    public function createRequest( int $price, string $fromShebaNumber, string $toShebaNumber, ?string $note = null ): array
+    public function createRequest( int $price, string $fromShebaNumber, string $toShebaNumber, ?string $note = null, ?string $idempotencyKey = null ): array
     {
-        $sourceAccount = Account::where( 'sheba_number', $fromShebaNumber )->first();
+        if ( $idempotencyKey ) {
+            $existingTransfer = ShebaRequest::where( 'idempotency_key', $idempotencyKey )->first();
 
-        if ( !$sourceAccount ) {
-            throw new InvalidRequestException( 'Source account not found' );
-        }
-
-        if ( $sourceAccount->balance < $price ) {
-            throw new InsufficientBalanceException( 'Insufficient balance for this transfer' );
-        }
-
-        return DB::transaction( function () use ( $price, $fromShebaNumber, $toShebaNumber, $note, $sourceAccount ) {
-            $updated = DB::table( 'accounts' )
-                ->where( 'id', $sourceAccount->id )
-                ->where( 'balance', '>=', $price )
-                ->update( [
-                    'balance' => DB::raw( "balance - $price" )
+            if ( $existingTransfer ) {
+                Log::info( 'Duplicate request detected using idempotency key', [
+                    'idempotency_key' => $idempotencyKey,
+                    'transfer_id'     => $existingTransfer->id
                 ] );
 
-            if ( !$updated ) {
-                throw new InsufficientBalanceException( 'Insufficient balance for this transfer' );
+                return [
+                    'id'              => $existingTransfer->id,
+                    'price'           => $existingTransfer->price,
+                    'status'          => $existingTransfer->status,
+                    'fromShebaNumber' => $existingTransfer->from_sheba_number,
+                    'ToShebaNumber'   => $existingTransfer->to_sheba_number,
+                    'createdAt'       => $existingTransfer->created_at->toIso8601String()
+                ];
             }
+        }
 
-            $requestId = (string)Str::uuid();
-            $shebaRequest = new ShebaRequest();
-            $shebaRequest->id = $requestId;
-            $shebaRequest->price = $price;
-            $shebaRequest->from_sheba_number = $fromShebaNumber;
-            $shebaRequest->to_sheba_number = $toShebaNumber;
-            $shebaRequest->note = $note;
-            $shebaRequest->status = 'pending';
-            $shebaRequest->save();
-
-            Transaction::create( [
-                'account_id'       => $sourceAccount->id,
-                'sheba_request_id' => $requestId,
-                'type'             => 'debit',
-                'amount'           => $price,
-                'note'             => $note ?? 'Transfer deduction'
-            ] );
-
-            return [
-                'id'              => $requestId,
-                'price'           => $price,
-                'status'          => 'pending',
-                'fromShebaNumber' => $fromShebaNumber,
-                'ToShebaNumber'   => $toShebaNumber,
-                'createdAt'       => $shebaRequest->created_at->toIso8601String()
-            ];
-        } );
+        $job = new ProcessTransferRequest( $price, $fromShebaNumber, $toShebaNumber, $note, $idempotencyKey );
+        return dispatch_sync( $job );
     }
 
     public function updateRequestStatus( string $requestId, string $status, ?string $note = null ): array
     {
-        $shebaRequest = ShebaRequest::find( $requestId );
+        $job = new ProcessTransferApproval( $requestId, $status, $note );
+        $result = dispatch_sync( $job );
 
-        if ( !$shebaRequest ) {
-            throw new InvalidRequestException( 'Sheba request not found' );
-        }
+        $this->clearCaches();
 
-        if ( $shebaRequest->status !== 'pending' ) {
-            throw new InvalidRequestException( 'Sheba request is not in pending status' );
-        }
-
-        return DB::transaction( function () use ( $shebaRequest, $status, $note ) {
-            if ( $status === 'confirmed' ) {
-                $this->confirmRequest( $shebaRequest );
-            } else if ( $status === 'canceled' ) {
-                $this->cancelRequest( $shebaRequest, $note );
-            }
-
-            return [
-                'id'              => $shebaRequest->id,
-                'price'           => $shebaRequest->price,
-                'status'          => $shebaRequest->status,
-                'fromShebaNumber' => $shebaRequest->from_sheba_number,
-                'ToShebaNumber'   => $shebaRequest->to_sheba_number,
-                'createdAt'       => $shebaRequest->created_at->toIso8601String()
-            ];
-        } );
+        return $result;
     }
 
     private function confirmRequest( ShebaRequest $shebaRequest ): void
@@ -164,5 +131,13 @@ class ShebaService
         $shebaRequest->canceled_at = now();
         $shebaRequest->cancellation_note = $note;
         $shebaRequest->save();
+    }
+
+    private function clearCaches(): void
+    {
+        Cache::forget( 'sheba_requests_all' );
+        Cache::forget( 'sheba_requests_pending' );
+        Cache::forget( 'sheba_requests_completed' );
+        Cache::forget( 'sheba_requests_canceled' );
     }
 }

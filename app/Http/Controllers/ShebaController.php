@@ -10,6 +10,8 @@ use App\Services\ShebaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ShebaController extends Controller
 {
@@ -22,21 +24,35 @@ class ShebaController extends Controller
 
     public function index(): JsonResponse
     {
-        $requests = $this->shebaService->getAllRequests();
+        try {
+            $requests = $this->shebaService->getAllRequests();
 
-        return response()->json( [
-            'requests' => $requests
-        ] );
+            return response()->json( [
+                'requests' => $requests
+            ] );
+        } catch ( \Exception $e ) {
+            Log::error( 'Error retrieving Sheba requests: ' . $e->getMessage(), [
+                'exception' => $e
+            ] );
+
+            return response()->json( [
+                'message' => 'An error occurred while retrieving Sheba requests',
+                'code'    => 'SERVER_ERROR'
+            ], 500 );
+        }
     }
 
     public function store( ShebaStoreRequest $request ): JsonResponse
     {
         try {
+            $idempotencyKey = $request->header( 'X-Idempotency-Key', Str::uuid()->toString() );
+
             $shebaRequest = $this->shebaService->createRequest(
                 $request->price,
                 $request->fromShebaNumber,
                 $request->ToShebaNumber,
-                $request->note
+                $request->note,
+                $idempotencyKey
             );
 
             return response()->json( [
@@ -44,16 +60,27 @@ class ShebaController extends Controller
                 'request' => $shebaRequest
             ], 201 );
         } catch ( InsufficientBalanceException $e ) {
+            Log::warning( 'Insufficient balance for transfer', [
+                'from'   => $request->fromShebaNumber,
+                'amount' => $request->price
+            ] );
+
             return response()->json( [
                 'message' => $e->getMessage(),
                 'code'    => 'INSUFFICIENT_BALANCE'
             ], 422 );
         } catch ( InvalidRequestException $e ) {
+            Log::warning( 'Invalid transfer request: ' . $e->getMessage() );
+
             return response()->json( [
                 'message' => $e->getMessage(),
                 'code'    => 'INVALID_REQUEST'
             ], 400 );
         } catch ( \Exception $e ) {
+            Log::error( 'Error processing transfer request: ' . $e->getMessage(), [
+                'exception' => $e
+            ] );
+
             return response()->json( [
                 'message' => 'An error occurred while processing your request',
                 'code'    => 'SERVER_ERROR'
