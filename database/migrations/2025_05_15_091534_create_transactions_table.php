@@ -23,6 +23,10 @@ return new class extends Migration
 
             $table->index('account_id');
             $table->index('sheba_request_id');
+            $table->index(['account_id', 'type'], 'idx_account_type');        // For account statements filtering by type
+            $table->index(['created_at'], 'idx_transaction_date');            // For time-based transaction history
+            $table->index(['sheba_request_id', 'type'], 'idx_transfer_type'); // For transfer auditing by type
+            $table->index(['type', 'created_at'], 'idx_type_date');           // For financial reporting by period
         });
     }
 
