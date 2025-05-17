@@ -1,5 +1,7 @@
 services:
     app:
+        deploy:
+            replicas: 4
         build:
             context: .
             dockerfile: docker/php/Dockerfile
@@ -14,7 +16,7 @@ services:
         depends_on:
             - db
             - redis
-        command: php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000
+        command: php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000 --workers=16 --task-workers=8
 
     caddy:
         image: caddy:2-alpine
@@ -70,7 +72,7 @@ services:
             - app
             - db
             - redis
-        command: php artisan queue:work
+        command: php artisan queue:work --queue=high,default --tries=3 --timeout=90
 
 networks:
     sheba_network:
