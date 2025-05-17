@@ -38,7 +38,7 @@ return [
     |
     */
 
-    'server' => env('OCTANE_SERVER', 'roadrunner'),
+    'server' => env( 'OCTANE_SERVER', 'swoole' ),
 
     /*
     |--------------------------------------------------------------------------
@@ -51,7 +51,7 @@ return [
     |
     */
 
-    'https' => env('OCTANE_HTTPS', false),
+    'https' => env( 'OCTANE_HTTPS', false ),
 
     /*
     |--------------------------------------------------------------------------
@@ -132,6 +132,7 @@ return [
 
     'warm' => [
         ...Octane::defaultServicesToWarm(),
+        \App\Services\ShebaService::class,
     ],
 
     'flush' => [
@@ -151,7 +152,7 @@ return [
 
     'tables' => [
         'example:1000' => [
-            'name' => 'string:1000',
+            'name'  => 'string:1000',
             'votes' => 'int',
         ],
     ],
@@ -168,7 +169,7 @@ return [
     */
 
     'cache' => [
-        'rows' => 1000,
+        'rows'  => 1000,
         'bytes' => 10000,
     ],
 
@@ -221,4 +222,14 @@ return [
 
     'max_execution_time' => 30,
 
+
+    'swoole' => [
+        'options' => [
+            'worker_num'         => 16,
+            'task_worker_num'    => 8,
+            'reactor_num'        => 16,
+            'max_connection'     => 10000,
+            'socket_buffer_size' => 2 * 1024 * 1024,
+        ],
+    ],
 ];
