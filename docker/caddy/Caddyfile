@@ -1,7 +1,10 @@
 # Development Caddyfile
-localhost:8012 {
-    # Reverse proxy to Octane
-    reverse_proxy app:8000
+localhost:8090 {
+    reverse_proxy app:8000 {
+            lb_policy round_robin
+            health_path /up
+            health_interval 10s
+        }
 
     # Enable compression
     encode gzip
