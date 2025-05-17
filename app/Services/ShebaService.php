@@ -74,12 +74,24 @@ class ShebaService
 
     public function updateRequestStatus( string $requestId, string $status, ?string $note = null ): array
     {
-        $job = new ProcessTransferApproval( $requestId, $status, $note );
-        $result = dispatch_sync( $job );
+        $lock = Cache::lock( 'transfer-lock-' . $requestId, 10 );
 
-        $this->clearCaches();
+        if ( $lock->get() ) {
+            try {
+                $job = new ProcessTransferApproval( $requestId, $status, $note );
+                $result = dispatch_sync( $job );
 
-        return $result;
+                $this->clearCaches();
+
+                return $result;
+            } finally {
+                $lock->release();
+            }
+        }
+
+        Log::warning( 'Could not acquire lock for transfer', [ 'id' => $requestId ] );
+        throw new InvalidRequestException( 'Transfer is currently being processed by another request' );
+
     }
 
     private function confirmRequest( ShebaRequest $shebaRequest ): void
