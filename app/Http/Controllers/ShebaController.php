@@ -70,7 +70,10 @@ class ShebaController extends Controller
                 'code'    => 'INSUFFICIENT_BALANCE'
             ], 422 );
         } catch ( InvalidRequestException $e ) {
-            Log::warning( 'Invalid transfer request: ' . $e->getMessage() );
+            Log::warning( 'Invalid transfer request: ' . $e->getMessage(), [
+                'from' => $request->fromShebaNumber,
+                'to'   => $request->ToShebaNumber
+            ] );
 
             return response()->json( [
                 'message' => $e->getMessage(),
@@ -78,11 +81,13 @@ class ShebaController extends Controller
             ], 400 );
         } catch ( \Exception $e ) {
             Log::error( 'Error processing transfer request: ' . $e->getMessage(), [
-                'exception' => $e
+                'exception' => $e,
+                'from'      => $request->fromShebaNumber,
+                'to'        => $request->ToShebaNumber
             ] );
 
             return response()->json( [
-                'message' => 'An error occurred while processing your request',
+                'message' => 'AAn error occurred while processing your request',
                 'code'    => 'SERVER_ERROR'
             ], 500 );
         }
@@ -112,7 +117,7 @@ class ShebaController extends Controller
             ], 400 );
         } catch ( \Exception $e ) {
             return response()->json( [
-                'message' => 'An error occurred while processing your request',
+                'message' => 'Ann error occurred while processing your request',
                 'code'    => 'SERVER_ERROR'
             ], 500 );
         }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Account;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ShebaStoreRequest extends FormRequest
@@ -23,8 +24,16 @@ class ShebaStoreRequest extends FormRequest
     {
         return [
             'price'           => 'required|numeric|gt:0',
-            'fromShebaNumber' => 'required|string|regex:/^IR[0-9]{24}$/',
-            'ToShebaNumber'   => 'required|string|regex:/^IR[0-9]{24}$/|different:fromShebaNumber',
+            'fromShebaNumber' => [
+                'required',
+                'string',
+                'regex:/^IR[0-9]{24}$/',
+                function ($attribute, $value, $fail) {
+                    if (!Account::where('sheba_number', $value)->exists()) {
+                        $fail('The source Sheba number does not exist in our records.');
+                    }
+                },
+            ],            'ToShebaNumber'   => 'required|string|regex:/^IR[0-9]{24}$/|different:fromShebaNumber',
             'note'            => 'nullable|string|max:255',
         ];
     }

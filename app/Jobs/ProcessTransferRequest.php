@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Exceptions\InsufficientBalanceException;
+use App\Exceptions\InvalidRequestException;
 use App\Models\Account;
 use App\Models\ShebaRequest;
 use App\Models\Transaction;
@@ -39,6 +40,7 @@ class ProcessTransferRequest implements ShouldQueue
 
     /**
      * Execute the job.
+     * @throws InvalidRequestException
      */
     public function handle(): array
     {
@@ -53,7 +55,7 @@ class ProcessTransferRequest implements ShouldQueue
 
         if ( !$sourceAccount ) {
             Log::error( 'Source account not found', [ 'sheba' => $this->fromShebaNumber ] );
-            throw new \Exception( 'Source account not found' );
+            throw new InvalidRequestException( 'Source account not found' );
         }
 
         return DB::transaction( function () use ( $sourceAccount ) {
