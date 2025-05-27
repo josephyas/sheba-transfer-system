@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class ShebaStoreRequest extends FormRequest
 {
@@ -33,7 +35,8 @@ class ShebaStoreRequest extends FormRequest
                         $fail('The source Sheba number does not exist in our records.');
                     }
                 },
-            ],            'ToShebaNumber'   => 'required|string|regex:/^IR[0-9]{24}$/|different:fromShebaNumber',
+            ],
+            'toShebaNumber'   => 'required|string|regex:/^IR[0-9]{24}$/|different:fromShebaNumber',
             'note'            => 'nullable|string|max:255',
         ];
     }
@@ -48,9 +51,26 @@ class ShebaStoreRequest extends FormRequest
             'fromShebaNumber.required' => 'The source Sheba number is required',
             'fromShebaNumber.regex'    => 'The source Sheba number must start with IR followed by 24 digits',
 
-            'ToShebaNumber.required'  => 'The destination Sheba number is required',
-            'ToShebaNumber.regex'     => 'The destination Sheba number must start with IR followed by 24 digits',
-            'ToShebaNumber.different' => 'The source and destination Sheba numbers cannot be the same',
+            'toShebaNumber.required'  => 'The destination Sheba number is required',
+            'toShebaNumber.regex'     => 'The destination Sheba number must start with IR followed by 24 digits',
+            'toShebaNumber.different' => 'The source and destination Sheba numbers cannot be the same',
         ];
+    }
+
+    /**
+     * Handle a failed validation attempt.
+     *
+     * @param  \Illuminate\Contracts\Validation\Validator  $validator
+     * @return void
+     *
+     * @throws \Illuminate\Http\Exceptions\HttpResponseException
+     */
+    protected function failedValidation(Validator $validator)
+    {
+        throw new HttpResponseException(response()->json([
+            'message' => 'Validation failed',
+            'errors' => $validator->errors(),
+            'code' => 'VALIDATION_ERROR'
+        ], 422));
     }
 }
