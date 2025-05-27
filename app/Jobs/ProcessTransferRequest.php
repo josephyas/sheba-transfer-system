@@ -25,12 +25,14 @@ class ProcessTransferRequest implements ShouldQueue
     protected $toShebaNumber;
     protected $note;
     protected $idempotencyKey;
+    private   $requestId;
 
     /**
      * Create a new job instance.
      */
-    public function __construct( int $price, string $fromShebaNumber, string $toShebaNumber, ?string $note = null, ?string $idempotencyKey = null )
+    public function __construct( string $requestId, int $price, string $fromShebaNumber, string $toShebaNumber, ?string $note = null, ?string $idempotencyKey = null )
     {
+        $this->requestId = $requestId;
         $this->price = $price;
         $this->fromShebaNumber = $fromShebaNumber;
         $this->toShebaNumber = $toShebaNumber;
@@ -75,9 +77,8 @@ class ProcessTransferRequest implements ShouldQueue
                 throw new InsufficientBalanceException( 'Insufficient balance for this transfer' );
             }
 
-            $requestId = (string)Str::uuid();
             $shebaRequest = new ShebaRequest();
-            $shebaRequest->id = $requestId;
+            $shebaRequest->id = $this->requestId;
             $shebaRequest->price = $this->price;
             $shebaRequest->from_sheba_number = $this->fromShebaNumber;
             $shebaRequest->to_sheba_number = $this->toShebaNumber;
@@ -88,19 +89,19 @@ class ProcessTransferRequest implements ShouldQueue
 
             Transaction::create( [
                 'account_id'       => $sourceAccount->id,
-                'sheba_request_id' => $requestId,
+                'sheba_request_id' => $this->requestId,
                 'type'             => 'debit',
                 'amount'           => $this->price,
                 'note'             => $this->note ?? 'Transfer deduction'
             ] );
 
             Log::info( 'Transfer request processed successfully', [
-                'request_id' => $requestId,
+                'request_id' => $this->requestId,
                 'status'     => 'pending'
             ] );
 
             return [
-                'id'              => $requestId,
+                'id'              => $this->requestId,
                 'price'           => $this->price,
                 'status'          => 'pending',
                 'fromShebaNumber' => $this->fromShebaNumber,

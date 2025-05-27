@@ -9,6 +9,7 @@ use App\Jobs\ProcessTransferRequest;
 use App\Models\Account;
 use App\Models\ShebaRequest;
 use App\Models\Transaction;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -46,8 +47,10 @@ class ShebaService
      * @throws InvalidRequestException
      * @throws InsufficientBalanceException
      */
-    public function createRequest( int $price, string $fromShebaNumber, string $toShebaNumber, ?string $note = null, ?string $idempotencyKey = null ): array
+    public function createRequest( $price, string $fromShebaNumber, string $toShebaNumber, ?string $note = null, ?string $idempotencyKey = null ): array
     {
+        $price = (int)$price;
+
         if ( $idempotencyKey ) {
             $existingTransfer = ShebaRequest::where( 'idempotency_key', $idempotencyKey )->first();
 
@@ -63,13 +66,24 @@ class ShebaService
                     'status'          => $existingTransfer->status,
                     'fromShebaNumber' => $existingTransfer->from_sheba_number,
                     'ToShebaNumber'   => $existingTransfer->to_sheba_number,
-                    'createdAt'       => $existingTransfer->created_at->toIso8601String()
+                    'createdAt'       => $existingTransfer->created_at->toIso8601String(),
                 ];
             }
         }
 
-        $job = new ProcessTransferRequest( $price, $fromShebaNumber, $toShebaNumber, $note, $idempotencyKey );
-        return $job->handle();
+        $requestId = (string)Str::uuid();
+        $job = ( new ProcessTransferRequest( $requestId, (int)$price, $fromShebaNumber, $toShebaNumber, $note, $idempotencyKey ) )
+            ->onQueue( 'transfers' )
+            ->afterCommit();
+        Bus::dispatch( $job );
+        return [
+            'id'              => $requestId,
+            'price'           => $price,
+            'status'          => 'queued',
+            'fromShebaNumber' => $fromShebaNumber,
+            'ToShebaNumber'   => $toShebaNumber,
+            'createdAt'       => now()->toIso8601String(),
+        ];
     }
 
     public function updateRequestStatus( string $requestId, string $status, ?string $note = null ): array
@@ -78,9 +92,14 @@ class ShebaService
 
         if ( $lock->get() ) {
             try {
-                $job = new ProcessTransferApproval( $requestId, $status, $note );
-
-                return $job->handle();
+                $job = ( new ProcessTransferApproval( $requestId, $status, $note ) )
+                    ->onQueue( 'transfers' )
+                    ->afterCommit();
+                Bus::dispatch( $job );
+                return [
+                    'id'     => $requestId,
+                    'status' => 'update_queued'
+                ];
 
             } finally {
                 $lock->release();
